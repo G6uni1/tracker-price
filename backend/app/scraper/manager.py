@@ -6,9 +6,9 @@ SCRAPER_MAP = {
     # adicione outras lojas aqui
 }
 
-async def run_scraper(store: str, url: str) -> Dict:
+async def run_scraper(store: str, url: str) -> dict | None:
     scraper_class = SCRAPER_MAP.get(store.lower())
     if not scraper_class:
         raise ValueError(f"Scraper para {store} não implementado")
     scraper = scraper_class()
-    return await scraper.extract(url)
+    return await scraper.extract_with_retry(url)
