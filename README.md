@@ -37,10 +37,15 @@ O microsserviço de IA utiliza séries temporais para prever a tendência de pre
 
 ## 🗂 Estrutura do Projeto
 ├── backend/ # API FastAPI + scrapers
+
 ├── frontend/ # Aplicação React
+
 ├── prediction_service/# Microsserviço de IA
+
 ├── nginx/ # Configuração do proxy reverso
+
 ├── docker-compose.yml
+
 └── .github/workflows # CI/CD
 
 
@@ -54,17 +59,8 @@ O microsserviço de IA utiliza séries temporais para prever a tendência de pre
 - Microsserviço separado de IA demonstra desacoplamento e escalabilidade
 
 ## 👤 Autor
-**Luiz Guilherme da Silva** – 
+**Luiz Guilherme da Silva**  
 
 ---
+<img width="2288" height="1762" alt="deepseek_mermaid_20260527_4537e6" src="https://github.com/user-attachments/assets/e9af6a37-23f3-4386-8ed5-53c6faf38e52" />
 
-graph TD
-    A[Usuário] -->|HTTP| B[Nginx]
-    B --> C[Frontend React]
-    B --> D[Backend FastAPI :8000]
-    D --> E[(PostgreSQL)]
-    D --> F[Scraper Worker]
-    F --> G[Sites Externos]
-    D --> H[Notificações: SendGrid, Telegram]
-    A --> I[Serviço Previsão :8001]
-    I --> D
