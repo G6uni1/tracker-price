@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from .api.api import api_router
 from .core.database import engine, Base
+import logging.config
+from .core.logging_config import LOGGING_CONFIG
+logging.config.dictConfig(LOGGING_CONFIG)
 
 app = FastAPI(title="Rastreador de Preços Inteligente")
 
