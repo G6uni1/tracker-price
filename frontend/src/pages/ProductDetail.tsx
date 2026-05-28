@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProductHistory, PricePoint } from '../services/products';
-import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function ProductDetail() {
@@ -18,7 +17,9 @@ function ProductDetail() {
         .finally(() => setLoading(false));
 
       // chamada para previsão
-      axios.get(`http://localhost:8001/predict/${productId}`)
+
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+      api.get(`/predictions/${productId}`)
         .then(res => setPrediction(res.data.predictions.map((p: any) => ({
           data: new Date(p.ds).toLocaleDateString(),
           previsão: p.yhat,

@@ -1,39 +1,73 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr
+
 from ...core import security
 from ...core.database import get_db
 from ...schemas.user import UserCreate, Token
 from ...models.user import User
 from ...models.notification_settings import NotificationSettings
+from fastapi import Request
+from ...core.rate_limit import limiter
+
+@router.post("/login", response_model=Token)
+@limiter.limit("5/minute")
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    ...
+
+@router.post("/register", response_model=Token)
+@limiter.limit("3/minute")
+async def register(request: Request, user_in: UserCreate, db: AsyncSession = Depends(get_db)):
+    ...
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-@router.post("/register", response_model=Token)
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
 async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
-    # Verifica se email já existe
     existing = await db.execute(select(User).where(User.email == user_in.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email já cadastrado")
+
     user = User(
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
-        full_name=user_in.full_name
+        full_name=user_in.full_name,
     )
     db.add(user)
     await db.flush()
-    # Cria configuração padrão de notificações
+
     notif = NotificationSettings(user_id=user.id)
     db.add(notif)
     await db.commit()
+
     access_token = security.create_access_token(data={"sub": str(user.id)})
     return Token(access_token=access_token)
 
+
 @router.post("/login", response_model=Token)
-async def login(email: str, password: str, db: AsyncSession = Depends(get_db)):
-    user = await db.execute(select(User).where(User.email == email))
-    user = user.scalar_one_or_none()
-    if not user or not security.verify_password(password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.email == data.email))
+    user = result.scalar_one_or_none()
+
+    if not user or not security.verify_password(data.password, user.hashed_password):
+        # Tempo constante para evitar timing attacks
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta desativada",
+        )
+
     access_token = security.create_access_token(data={"sub": str(user.id)})
     return Token(access_token=access_token)

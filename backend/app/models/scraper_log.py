@@ -13,6 +13,6 @@ class ScraperLog(Base):
     status = Column(String)  # success, error, blocked
     message = Column(Text)
     execution_time_ms = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), datetime.now(timezone.utc))
 
     product = relationship("TrackedProduct", back_populates="scraper_logs")

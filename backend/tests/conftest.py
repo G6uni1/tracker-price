@@ -1,30 +1,61 @@
-# conftest.py
+# backend/tests/conftest.py
+import asyncio
 import pytest
-import requests
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase
 
-API_URL = "http://localhost:8000"
+from app.main import app
+from app.core.database import Base, get_db
 
-def login():
-    """Função auxiliar para obter um novo token"""
-    response = requests.post(f"{API_URL}/login", json={
-        "username": "usuario",
-        "password": "senha"
+# Banco em memória para testes
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def db_session():
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as session:
+        yield session
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(db_session: AsyncSession):
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        yield c
+
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def auth_token(client: AsyncClient) -> str:
+    response = await client.post("/api/v1/auth/register", json={
+        "email": "test@example.com",
+        "password": "senha_forte_123",
+        "full_name": "Test User",
     })
-    response.raise_for_status()
+    assert response.status_code == 201
     return response.json()["access_token"]
-
-@pytest.fixture
-def token():
-    """Fixture que garante um token válido"""
-    token_value = login()
-
-    def _get_token():
-        # Testa se o token ainda é válido
-        check = requests.get(f"{API_URL}/me", headers={
-            "Authorization": f"Bearer {token_value}"
-        })
-        if check.status_code == 401:  # expirou
-            return login()
-        return token_value
-
-    return _get_token
