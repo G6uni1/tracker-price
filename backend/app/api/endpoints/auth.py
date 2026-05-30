@@ -1,25 +1,15 @@
+# backend/app/api/endpoints/auth.py — VERSÃO CORRIGIDA COMPLETA
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
 
 from ...core import security
 from ...core.database import get_db
-from ...schemas.user import UserCreate, Token
-from ...models.user import User
-from ...models.notification_settings import NotificationSettings
-from fastapi import Request
 from ...core.rate_limit import limiter
-
-@router.post("/login", response_model=Token)
-@limiter.limit("5/minute")
-async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    ...
-
-@router.post("/register", response_model=Token)
-@limiter.limit("3/minute")
-async def register(request: Request, user_in: UserCreate, db: AsyncSession = Depends(get_db)):
-    ...
+from ...models.notification_settings import NotificationSettings
+from ...models.user import User
+from ...schemas.user import Token, UserCreate
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -30,7 +20,12 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
+@limiter.limit("3/minute")
+async def register(
+    request: Request,
+    user_in: UserCreate,
+    db: AsyncSession = Depends(get_db),
+):
     existing = await db.execute(select(User).where(User.email == user_in.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email já cadastrado")
@@ -52,12 +47,16 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(
+    request: Request,
+    data: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
     if not user or not security.verify_password(data.password, user.hashed_password):
-        # Tempo constante para evitar timing attacks
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",

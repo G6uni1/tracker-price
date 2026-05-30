@@ -1,7 +1,11 @@
+import random
 import re
 import logging
 from .base import BaseScraper
 from playwright.async_api import BrowserContext
+
+logger = logging.getLogger(__name__)
+
 
 logger = logging.getLogger(__name__)
 

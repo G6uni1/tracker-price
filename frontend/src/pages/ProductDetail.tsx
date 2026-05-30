@@ -1,44 +1,56 @@
+// frontend/src/pages/ProductDetail.tsx — CORRIGIDO
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import api from '../services/api';  // <-- import necessário
 import { getProductHistory, PricePoint } from '../services/products';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  LineChart, Line, XAxis, YAxis,
+  CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
 
 function ProductDetail() {
   const { productId } = useParams<{ productId: string }>();
   const [history, setHistory] = useState<PricePoint[]>([]);
-  const [prediction, setPrediction] = useState<any[]>([]);
+  const [prediction, setPrediction] = useState<{ data: string; previsão: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (productId) {
-      getProductHistory(productId)
-        .then(res => setHistory(res.data))
-        .catch(console.error)
-        .finally(() => setLoading(false));
+    if (!productId) return;
 
-      // chamada para previsão
+    const loadData = async () => {
+      try {
+        const histRes = await getProductHistory(productId);
+        setHistory(histRes.data);
+      } catch (err) {
+        console.error('Erro ao carregar histórico:', err);
+      } finally {
+        setLoading(false);
+      }
 
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-      api.get(`/predictions/${productId}`)
-        .then(res => setPrediction(res.data.predictions.map((p: any) => ({
-          data: new Date(p.ds).toLocaleDateString(),
-          previsão: p.yhat,
-        }))))
-        .catch(() => console.log("Previsão indisponível"));
-    }
+      try {
+        const predRes = await api.get(`/predictions/${productId}`);
+        const mapped = predRes.data.predictions.map((p: { ds: string; yhat: number }) => ({
+          data: new Date(p.ds).toLocaleDateString('pt-BR'),
+          previsão: Math.round(p.yhat * 100) / 100,
+        }));
+        setPrediction(mapped);
+      } catch {
+        console.log('Previsão indisponível');
+      }
+    };
+
+    loadData();
   }, [productId]);
 
-  if (loading) return <div>Carregando gráfico...</div>;
+  if (loading) return <div>Carregando...</div>;
 
-  // dados históricos
   const historyData = history
     .filter(p => p.price != null)
     .map(p => ({
-      data: new Date(p.collected_at).toLocaleDateString(),
+      data: new Date(p.collected_at).toLocaleDateString('pt-BR'),
       preço: p.price,
     }));
 
-  // combinar histórico + previsão
   const chartData = [...historyData, ...prediction];
 
   return (
@@ -49,10 +61,16 @@ function ProductDetail() {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="data" />
           <YAxis />
-          <Tooltip />
-          <Line type="monotone" dataKey="preço" stroke="#8884d8" strokeWidth={2} />
+          <Tooltip formatter={(value: number) => `R$ ${value.toFixed(2)}`} />
+          <Line type="monotone" dataKey="preço" stroke="#8884d8" strokeWidth={2} dot={false} />
           {prediction.length > 0 && (
-            <Line type="monotone" dataKey="previsão" stroke="#ff7300" strokeDasharray="5 5" />
+            <Line
+              type="monotone"
+              dataKey="previsão"
+              stroke="#ff7300"
+              strokeDasharray="5 5"
+              dot={false}
+            />
           )}
         </LineChart>
       </ResponsiveContainer>
